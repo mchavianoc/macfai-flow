@@ -1,17 +1,27 @@
+# users/views.py
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView, LogoutView
-from django.urls import reverse_lazy
-
-class CustomLoginView(LoginView):
-    template_name = 'login.html'
-    redirect_authenticated_user = True
+from agents.models import Agent
+from calls.models import Call
+from calls.services import get_user_monthly_consumption
 
 @login_required
 def dashboard(request):
-    # Aquí obtendremos datos relacionados con el usuario (llamadas, agentes, etc.)
-    # Por ahora solo pasamos el usuario
+    user = request.user
+    
+    # Usar servicios especializados
+    consumption = get_user_monthly_consumption(user)
+    agents = Agent.objects.filter(user=user, is_active=True)
+    recent_calls = Call.objects.filter(
+        agent__user=user
+    ).select_related('agent').order_by('-started_at')[:10]
+    
     context = {
-        'user': request.user,
+        'user': user,
+        'agents': agents,
+        'recent_calls': recent_calls,
+        'consumption': consumption,
+        'limit_warning': consumption.get('percentage_used', 0) >= 80 
+            if consumption.get('percentage_used') else False,
     }
     return render(request, 'dashboard.html', context)

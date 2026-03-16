@@ -20,6 +20,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'users',
+    'agents',
+    'calls',
+    'webhooks',
 ]
 
 MIDDLEWARE = [
@@ -32,7 +35,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'ElevenLabsAPI.urls'
+ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {

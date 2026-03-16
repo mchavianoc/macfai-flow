@@ -1,18 +1,105 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Dashboard</title>
-</head>
-<body>
-    <h1>Welcome, {{ user.email }}</h1>
-    <p>This is your dashboard.</p>
-    <p>Company: {{ user.company_name|default:"Not specified" }}</p>
-    <p>Monthly minutes limit: {{ user.monthly_minutes_limit|default:"Unlimited" }}</p>
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Bienvenido, {{ user.get_full_name }}</h2>
     
-    <h2>Your calls</h2>
-    <!-- Aquí mostraremos las llamadas cuando exista el modelo -->
-    <p>No calls yet.</p>
+    <!-- Tarjeta de consumo mensual -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    Consumo del mes
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{ consumption.total_minutes }} minutos</h5>
+                    <p class="card-text">
+                        Llamadas completadas: {{ consumption.total_calls }}<br>
+                        Segundos totales: {{ consumption.total_seconds }}
+                    </p>
+                    
+                    {% if user.monthly_minutes_limit %}
+                        <p>Límite mensual: {{ user.monthly_minutes_limit }} minutos</p>
+                        <div class="progress">
+                            <div class="progress-bar 
+                                {% if limit_warning %}bg-warning{% endif %}
+                                {% if consumption.percentage_used >= 100 %}bg-danger{% endif %}"
+                                role="progressbar"
+                                style="width: {{ consumption.percentage_used|floatformat:1 }}%;"
+                                aria-valuenow="{{ consumption.percentage_used }}"
+                                aria-valuemin="0"
+                                aria-valuemax="100">
+                                {{ consumption.percentage_used|floatformat:1 }}%
+                            </div>
+                        </div>
+                        {% if consumption.percentage_used >= 100 %}
+                            <div class="alert alert-danger mt-2">¡Has excedido tu límite mensual!</div>
+                        {% elif limit_warning %}
+                            <div class="alert alert-warning mt-2">Estás cerca de tu límite mensual.</div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Agentes activos -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    Tus agentes
+                </div>
+                <div class="card-body">
+                    {% if agents %}
+                        <ul class="list-group">
+                        {% for agent in agents %}
+                            <li class="list-group-item">{{ agent.name }} (ID: {{ agent.agent_id }})</li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>No tienes agentes activos.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
     
-    <a href="{% url 'logout' %}">Logout</a>
-</body>
-</html>
+    <!-- Llamadas recientes -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    Llamadas recientes
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID Llamada</th>
+                                <th>Agente</th>
+                                <th>Duración (min)</th>
+                                <th>Estado</th>
+                                <th>Inicio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for call in recent_calls %}
+                            <tr>
+                                <td>{{ call.call_id|truncatechars:8 }}</td>
+                                <td>{{ call.agent.name }}</td>
+                                <td>{{ call.minutes_consumed }}</td>
+                                <td>{{ call.get_status_display }}</td>
+                                <td>{{ call.started_at|date:"d/m/Y H:i" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5">No hay llamadas recientes.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
