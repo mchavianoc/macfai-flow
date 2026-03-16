@@ -12,6 +12,17 @@
                     Consumo del mes
                 </div>
                 <div class="card-body">
+                    {% if consumption.errors %}
+                        <div class="alert alert-warning">
+                            <strong>Errores al consultar algunos agentes:</strong>
+                            <ul>
+                                {% for error in consumption.errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                    
                     <h5 class="card-title">{{ consumption.total_minutes }} minutos</h5>
                     <p class="card-text">
                         Llamadas completadas: {{ consumption.total_calls }}<br>
@@ -58,45 +69,6 @@
                     {% else %}
                         <p>No tienes agentes activos.</p>
                     {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Llamadas recientes -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    Llamadas recientes
-                </div>
-                <div class="card-body">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>ID Llamada</th>
-                                <th>Agente</th>
-                                <th>Duración (min)</th>
-                                <th>Estado</th>
-                                <th>Inicio</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for call in recent_calls %}
-                            <tr>
-                                <td>{{ call.call_id|truncatechars:8 }}</td>
-                                <td>{{ call.agent.name }}</td>
-                                <td>{{ call.minutes_consumed }}</td>
-                                <td>{{ call.get_status_display }}</td>
-                                <td>{{ call.started_at|date:"d/m/Y H:i" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5">No hay llamadas recientes.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </div>

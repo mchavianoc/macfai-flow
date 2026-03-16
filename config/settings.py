@@ -96,3 +96,5 @@ AUTH_USER_MODEL = 'users.User'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
+
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
