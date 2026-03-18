@@ -1,13 +1,11 @@
 import json
 import threading
-from django.db import models
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from .models import WebhookEntry
 from .handlers import run_handler
 from agents.models import Agent
-from users.models import User
 
 @csrf_exempt
 @require_POST
@@ -51,18 +49,3 @@ def webhook_receiver(request, endpoint):
         "webhook_id": entry.id,
         "mensaje": "Webhook recibido y en proceso."
     })
-
-class WebhookEntry(models.Model):
-    endpoint = models.SlugField()
-    method = models.CharField(max_length=10)
-    headers = models.JSONField(default=dict)
-    payload = models.JSONField(default=dict)
-    raw_body = models.TextField(blank=True)
-    agent = models.ForeignKey(Agent, null=True, blank=True, on_delete=models.SET_NULL, related_name='webhooks')
-    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='webhooks')
-    processed = models.BooleanField(default=False)
-    processing_result = models.JSONField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.endpoint} - {self.created_at}"
