@@ -21,14 +21,9 @@ for _, module_name, _ in pkgutil.iter_modules(__path__):
         logger.error(f"Error cargando handler {module_name}: {e}")
 
 def get_handler(endpoint):
-    """Retorna la función handle para el endpoint dado."""
     return _handlers.get(endpoint)
 
 def run_handler(entry_id):
-    """
-    Ejecuta el handler correspondiente a una entrada de webhook.
-    Esta función se llama de forma asíncrona.
-    """
     try:
         entry = WebhookEntry.objects.get(id=entry_id)
     except WebhookEntry.DoesNotExist:
@@ -47,6 +42,5 @@ def run_handler(entry_id):
         finally:
             entry.save(update_fields=['processed', 'processing_result'])
     else:
-        # No hay handler específico, marcamos como procesado sin resultado
         entry.processed = True
         entry.save(update_fields=['processed'])
