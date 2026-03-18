@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'agents',
     'calls',
     'webhooks',
+    'client_dashboard',
 ]
 
 MIDDLEWARE = [
