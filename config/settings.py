@@ -10,8 +10,11 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-pb+n4^!2b#hcmf
 
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
-
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'flow.macfai.com',
+]
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
