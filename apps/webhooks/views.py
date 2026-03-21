@@ -1,11 +1,26 @@
 import json
 import threading
-from django.http import JsonResponse
+import hmac
+import hashlib
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.conf import settings
 from .models import WebhookEntry
 from .handlers import run_handler
 from agents.models import Agent
+
+def verify_elevenlabs_signature(request):
+    """
+    Verifica la firma HMAC-SHA256 enviada por ElevenLabs.
+    """
+    signature = request.headers.get('X-ElevenLabs-Signature')
+    if not signature:
+        return False
+    secret = settings.ELEVENLABS_WEBHOOK_SECRET.encode()
+    body = request.body
+    expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 @csrf_exempt
 @require_POST
@@ -14,6 +29,11 @@ def webhook_receiver(request, endpoint):
     Vista genérica para recibir webhooks.
     Guarda la petición y dispara el handler correspondiente.
     """
+    # Si es el endpoint call-ended y tenemos clave secreta, validar firma
+    if endpoint == 'call-ended' and settings.ELEVENLABS_WEBHOOK_SECRET:
+        if not verify_elevenlabs_signature(request):
+            return HttpResponseBadRequest("Invalid signature")
+
     # Guardar entrada
     try:
         payload = json.loads(request.body)
