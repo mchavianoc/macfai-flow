@@ -25,6 +25,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     
     # Datos específicos del cliente (opcional)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     monthly_minutes_limit = models.PositiveIntegerField(null=True, blank=True, help_text="Monthly call minutes limit")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
