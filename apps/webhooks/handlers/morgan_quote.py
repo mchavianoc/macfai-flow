@@ -6,29 +6,29 @@ logger = logging.getLogger(__name__)
 def handle(entry: WebhookEntry):
     """
     Procesa un webhook de cotización.
-    Se asume que el payload contiene la información necesaria.
+    Actualmente solo almacena el payload en la base de datos (ya está en WebhookEntry).
+    Deja una función placeholder para futuras acciones.
     """
     logger.info(f"Procesando cotización {entry.id}")
-    payload = entry.payload
-    texto = payload.get('texto', '')
 
-    # Aquí puedes extraer más datos del payload o del agente asociado
-    agent = entry.agent
-    if agent and agent.user:
-        # Ejemplo: enviar SMS al teléfono del usuario
-        telefono = agent.user.phone_number  # Asegúrate de que User tenga este campo
-        if telefono:
-            enviar_sms(telefono, f"Nueva cotización: {texto[:50]}...")
-            return {"sms_enviado": True, "destinatario": telefono}
-        else:
-            return {"sms_enviado": False, "razon": "Usuario sin teléfono"}
-    return {"sms_enviado": False, "razon": "Agente no asociado"}
+    # Aquí puedes agregar lógica personalizada en el futuro.
+    # Por ahora, solo se registra la recepción.
+    # El payload ya está guardado en entry.payload (JSONField).
 
-def enviar_sms(destino, mensaje):
-    """Función simulada de envío de SMS. Reemplazar con integración real."""
-    # from twilio.rest import Client
-    # client = Client(settings.TWILIO_SID, settings.TWILIO_TOKEN)
-    # client.messages.create(body=mensaje, from_=settings.TWILIO_NUMBER, to=destino)
-    logger.info(f"Enviando SMS a {destino}: {mensaje}")
-    # En desarrollo, solo imprimimos
-    print(f"SMS enviado a {destino}: {mensaje}")
+    # Llama a la función placeholder donde pondrás la lógica futura
+    resultado_placeholder = procesar_cotizacion(entry)
+
+    return {
+        "status": "success",
+        "message": "Webhook recibido y almacenado",
+        "placeholder_result": resultado_placeholder
+    }
+
+def procesar_cotizacion(entry: WebhookEntry):
+    """
+    Función placeholder para acciones futuras.
+    Aquí puedes implementar la lógica de negocio cuando esté lista.
+    """
+    # Por ahora, solo devuelve un mensaje indicando que no se ha implementado.
+    # En el futuro, puedes extraer datos del payload y realizar acciones.
+    return {"implementado": False, "mensaje": "Lógica pendiente de implementar"}
