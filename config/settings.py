@@ -103,4 +103,6 @@ LOGOUT_REDIRECT_URL = 'login'
 
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 
-ELEVENLABS_WEBHOOK_SECRET = os.environ.get('ELEVENLABS_WEBHOOK_SECRET', '')
+# ElevenLabs webhook secrets
+ELEVENLABS_SECRET = os.environ.get('ELEVENLABS_SECRET', '')          # For general webhooks (e.g., morgan_quote)
+ELEVENLABS_SECRET_CALL_ENDED = os.environ.get('ELEVENLABS_SECRET_CALL_ENDED', '')  # For call_ended webhook

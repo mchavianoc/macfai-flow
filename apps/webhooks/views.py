@@ -10,14 +10,14 @@ from .models import WebhookEntry
 from .handlers import run_handler
 from agents.models import Agent
 
-def verify_elevenlabs_signature(request):
+def verify_elevenlabs_signature(request, secret):
     """
-    Verifica la firma HMAC-SHA256 enviada por ElevenLabs.
+    Verifica la firma HMAC-SHA256 enviada por ElevenLabs usando el secret dado.
     """
     signature = request.headers.get('X-ElevenLabs-Signature')
     if not signature:
         return False
-    secret = settings.ELEVENLABS_WEBHOOK_SECRET.encode()
+    secret = secret.encode()
     body = request.body
     expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
@@ -29,10 +29,19 @@ def webhook_receiver(request, endpoint):
     Vista genérica para recibir webhooks.
     Guarda la petición y dispara el handler correspondiente.
     """
-    # Verificar firma para endpoints que lo requieran
-    if endpoint in ('call_ended', 'morgan_quote') and settings.ELEVENLABS_WEBHOOK_SECRET:
-        if not verify_elevenlabs_signature(request):
+    # Seleccionar el secreto según el endpoint
+    secret = None
+    if endpoint == 'call_ended':
+        secret = settings.ELEVENLABS_SECRET_CALL_ENDED
+    elif endpoint == 'morgan_quote':
+        secret = settings.ELEVENLABS_SECRET
+    # Puedes añadir más endpoints si es necesario
+
+    # Verificar firma si el endpoint requiere secreto y está configurado
+    if secret:
+        if not verify_elevenlabs_signature(request, secret):
             return HttpResponseBadRequest("Invalid signature")
+    # Si no hay secreto para este endpoint, continuamos sin verificación (o podrías rechazar)
 
     # Guardar entrada
     try:
