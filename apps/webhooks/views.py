@@ -2,6 +2,7 @@ import json
 import threading
 import hmac
 import hashlib
+import logging
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -9,6 +10,8 @@ from django.conf import settings
 from .models import WebhookEntry
 from .handlers import run_handler
 from agents.models import Agent
+
+logger = logging.getLogger(__name__)
 
 def verify_elevenlabs_signature(request, secret):
     """
@@ -35,14 +38,30 @@ def webhook_receiver(request, endpoint):
         secret = settings.ELEVENLABS_SECRET_CALL_ENDED
         if secret:
             if not verify_elevenlabs_signature(request, secret):
+                logger.warning(f"Firma HMAC inválida para call_ended. Header: {request.headers.get('X-ElevenLabs-Signature')}")
                 return HttpResponseBadRequest("Invalid signature")
+        else:
+            logger.warning("ELEVENLABS_SECRET_CALL_ENDED no configurado, se omite verificación")
+
     elif endpoint == 'morgan_quote':
         # Verificación simple por cabecera ELEVENLABS_SECRET
         expected_secret = settings.ELEVENLABS_SECRET
         if expected_secret:
-            received_secret = request.headers.get('ELEVENLABS_SECRET')
-            if not received_secret or received_secret != expected_secret:
+            # Buscar la cabecera sin distinción de mayúsculas (por si acaso)
+            received_secret = None
+            for key, value in request.headers.items():
+                if key.lower() == 'elevenlabs_secret':
+                    received_secret = value
+                    break
+            if not received_secret:
+                logger.warning(f"Cabecera ELEVENLABS_SECRET no encontrada. Headers: {dict(request.headers)}")
+                return HttpResponseBadRequest("Missing secret header")
+            if received_secret != expected_secret:
+                logger.warning(f"Secreto inválido: esperado '{expected_secret}', recibido '{received_secret}'")
                 return HttpResponseBadRequest("Invalid secret")
+        else:
+            logger.warning("ELEVENLABS_SECRET no configurado, se omite verificación")
+
     # Para otros endpoints, si se desea verificación, se puede añadir aquí
     # Si no hay verificación definida, se continúa sin comprobar
 
