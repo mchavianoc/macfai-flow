@@ -1,4 +1,5 @@
 import logging
+from django.utils import timezone
 from ..models import WebhookEntry
 
 logger = logging.getLogger(__name__)
@@ -6,29 +7,34 @@ logger = logging.getLogger(__name__)
 def handle(entry: WebhookEntry):
     """
     Procesa un webhook de cotización.
-    Actualmente solo almacena el payload en la base de datos (ya está en WebhookEntry).
-    Deja una función placeholder para futuras acciones.
+    Extrae los datos del payload y los almacena en un modelo específico (si existe).
     """
     logger.info(f"Procesando cotización {entry.id}")
+    payload = entry.payload
 
-    # Aquí puedes agregar lógica personalizada en el futuro.
-    # Por ahora, solo se registra la recepción.
-    # El payload ya está guardado en entry.payload (JSONField).
+    # Extraer campos típicos de una cotización (ajusta según el JSON real de ElevenLabs)
+    quote_id = payload.get('quote_id')
+    amount = payload.get('amount')
+    currency = payload.get('currency', 'USD')
+    status = payload.get('status', 'pending')
+    agent_id = payload.get('agent_id') or payload.get('agentId')
 
-    # Llama a la función placeholder donde pondrás la lógica futura
-    resultado_placeholder = procesar_cotizacion(entry)
+    # Asociar agente si no se hizo en la vista
+    agent = entry.agent
+    if not agent and agent_id:
+        try:
+            from agents.models import Agent
+            agent = Agent.objects.get(agent_id=agent_id)
+            entry.agent = agent
+            entry.user = agent.user
+            entry.save(update_fields=['agent', 'user'])
+        except Agent.DoesNotExist:
+            logger.warning(f"Agente con ID {agent_id} no encontrado")
 
     return {
         "status": "success",
-        "message": "Webhook recibido y almacenado",
-        "placeholder_result": resultado_placeholder
+        "quote_id": quote_id,
+        "amount": amount,
+        "currency": currency,
+        "message": "Cotización procesada correctamente"
     }
-
-def procesar_cotizacion(entry: WebhookEntry):
-    """
-    Función placeholder para acciones futuras.
-    Aquí puedes implementar la lógica de negocio cuando esté lista.
-    """
-    # Por ahora, solo devuelve un mensaje indicando que no se ha implementado.
-    # En el futuro, puedes extraer datos del payload y realizar acciones.
-    return {"implementado": False, "mensaje": "Lógica pendiente de implementar"}

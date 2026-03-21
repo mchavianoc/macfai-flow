@@ -29,8 +29,8 @@ def webhook_receiver(request, endpoint):
     Vista genérica para recibir webhooks.
     Guarda la petición y dispara el handler correspondiente.
     """
-    # Si es el endpoint call-ended y tenemos clave secreta, validar firma
-    if endpoint == 'call-ended' and settings.ELEVENLABS_WEBHOOK_SECRET:
+    # Verificar firma para endpoints que lo requieran
+    if endpoint in ('call-ended', 'morgan_quote') and settings.ELEVENLABS_WEBHOOK_SECRET:
         if not verify_elevenlabs_signature(request):
             return HttpResponseBadRequest("Invalid signature")
 
@@ -50,8 +50,10 @@ def webhook_receiver(request, endpoint):
         raw_body=raw_body,
     )
 
-    # Asociar agente si se proporciona ?agent_id=
+    # Asociar agente si se proporciona ?agent_id= o viene en el payload
     agent_id = request.GET.get('agent_id')
+    if not agent_id and payload:
+        agent_id = payload.get('agent_id') or payload.get('agentId')
     if agent_id:
         try:
             agent = Agent.objects.get(agent_id=agent_id)
