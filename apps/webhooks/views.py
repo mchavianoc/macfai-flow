@@ -15,10 +15,13 @@ logger = logging.getLogger(__name__)
 
 def verify_elevenlabs_signature(request, secret):
     """
-    Verifica la firma HMAC-SHA256 enviada por ElevenLabs usando el secret dado.
+    Verifies the HMAC-SHA256 signature sent by ElevenLabs.
     """
-    signature = request.headers.get('X-ElevenLabs-Signature')
+    # Headers are case-insensitive in Django, but we'll try both common variants
+    signature = request.headers.get('X-ElevenLabs-Signature') or \
+                request.headers.get('X-Elevenlabs-Signature')
     if not signature:
+        logger.warning("No X-ElevenLabs-Signature header found")
         return False
     secret = secret.encode()
     body = request.body
@@ -29,43 +32,14 @@ def verify_elevenlabs_signature(request, secret):
 @require_POST
 def webhook_receiver(request, endpoint):
     """
-    Vista genérica para recibir webhooks.
-    Guarda la petición y dispara el handler correspondiente.
+    Generic webhook receiver. Saves the request and triggers the appropriate handler.
+    Now always saves the incoming request (even if validation fails) for debugging.
     """
-    # --- Verificación según endpoint ---
-    if endpoint == 'call_ended':
-        # Verificación HMAC para call_ended
-        secret = settings.ELEVENLABS_SECRET_CALL_ENDED
-        if secret:
-            if not verify_elevenlabs_signature(request, secret):
-                logger.warning(f"Firma HMAC inválida para call_ended. Header: {request.headers.get('X-ElevenLabs-Signature')}")
-                return HttpResponseBadRequest("Invalid signature")
-        else:
-            logger.warning("ELEVENLABS_SECRET_CALL_ENDED no configurado, se omite verificación")
+    # Log all headers for debugging
+    logger.info(f"Received webhook for endpoint '{endpoint}'")
+    logger.debug(f"Headers: {dict(request.headers)}")
 
-    elif endpoint == 'morgan_quote':
-        # Verificación simple por cabecera ELEVENLABS_SECRET
-        expected_secret = settings.ELEVENLABS_SECRET
-        if expected_secret:
-            # Buscar la cabecera sin distinción de mayúsculas (por si acaso)
-            received_secret = None
-            for key, value in request.headers.items():
-                if key.lower() == 'elevenlabs_secret':
-                    received_secret = value
-                    break
-            if not received_secret:
-                logger.warning(f"Cabecera ELEVENLABS_SECRET no encontrada. Headers: {dict(request.headers)}")
-                return HttpResponseBadRequest("Missing secret header")
-            if received_secret != expected_secret:
-                logger.warning(f"Secreto inválido: esperado '{expected_secret}', recibido '{received_secret}'")
-                return HttpResponseBadRequest("Invalid secret")
-        else:
-            logger.warning("ELEVENLABS_SECRET no configurado, se omite verificación")
-
-    # Para otros endpoints, si se desea verificación, se puede añadir aquí
-    # Si no hay verificación definida, se continúa sin comprobar
-
-    # --- Guardar entrada ---
+    # --- Parse and save entry first (so we always have a record) ---
     try:
         payload = json.loads(request.body)
         raw_body = ''
@@ -81,7 +55,44 @@ def webhook_receiver(request, endpoint):
         raw_body=raw_body,
     )
 
-    # Asociar agente si se proporciona ?agent_id= o viene en el payload
+    # --- Perform endpoint-specific validation ---
+    validation_failed = False
+    error_message = None
+
+    if endpoint == 'call_ended':
+        secret = settings.ELEVENLABS_SECRET_CALL_ENDED
+        if secret:
+            if not verify_elevenlabs_signature(request, secret):
+                logger.warning(f"Invalid HMAC signature for call_ended. Entry ID: {entry.id}")
+                validation_failed = True
+                error_message = "Invalid signature"
+        else:
+            logger.warning("ELEVENLABS_SECRET_CALL_ENDED not set, skipping signature check")
+
+    elif endpoint == 'morgan_quote':
+        expected_secret = settings.ELEVENLABS_SECRET
+        if expected_secret:
+            # Look for the secret header (case-insensitive)
+            received_secret = request.headers.get('ElevenLabs-Secret') or \
+                              request.headers.get('elevenlabs_secret')
+            if not received_secret:
+                logger.warning(f"No ElevenLabs-Secret header found. Headers: {dict(request.headers)}")
+                validation_failed = True
+                error_message = "Missing secret header"
+            elif received_secret != expected_secret:
+                logger.warning(f"Invalid secret for morgan_quote: expected '{expected_secret}', got '{received_secret}'")
+                validation_failed = True
+                error_message = "Invalid secret"
+        else:
+            logger.warning("ELEVENLABS_SECRET not set, skipping secret check")
+
+    # If validation failed, update the entry and return 400
+    if validation_failed:
+        entry.processing_result = {"error": error_message}
+        entry.save(update_fields=['processing_result'])
+        return HttpResponseBadRequest(error_message)
+
+    # --- Validation passed: associate agent (if possible) ---
     agent_id = request.GET.get('agent_id')
     if not agent_id and payload:
         agent_id = payload.get('agent_id') or payload.get('agentId')
@@ -94,7 +105,7 @@ def webhook_receiver(request, endpoint):
         except Agent.DoesNotExist:
             pass
 
-    # Ejecutar handler en segundo plano
+    # --- Start background handler ---
     threading.Thread(target=run_handler, args=(entry.id,)).start()
 
     return JsonResponse({
