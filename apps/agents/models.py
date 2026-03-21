@@ -13,7 +13,6 @@ class Agent(models.Model):
     name = models.CharField(max_length=100)
     agent_id = models.CharField(max_length=100, unique=True)
     is_active = models.BooleanField(default=True)
-    configuration = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
