@@ -9,7 +9,7 @@ def handle(entry):
     """
     Procesa el webhook de finalización de llamada enviado por ElevenLabs.
     """
-    logger.info(f"Procesando call-ended webhook {entry.id}")
+    logger.info(f"Procesando call_ended webhook {entry.id}")
     payload = entry.payload
 
     # Extraer campos del payload (ajustar según la documentación de ElevenLabs)

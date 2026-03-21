@@ -30,7 +30,7 @@ def webhook_receiver(request, endpoint):
     Guarda la petición y dispara el handler correspondiente.
     """
     # Verificar firma para endpoints que lo requieran
-    if endpoint in ('call-ended', 'morgan_quote') and settings.ELEVENLABS_WEBHOOK_SECRET:
+    if endpoint in ('call_ended', 'morgan_quote') and settings.ELEVENLABS_WEBHOOK_SECRET:
         if not verify_elevenlabs_signature(request):
             return HttpResponseBadRequest("Invalid signature")
 
