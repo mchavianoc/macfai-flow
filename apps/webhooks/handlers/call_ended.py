@@ -1,5 +1,4 @@
-# apps/webhooks/handlers/call_ended.py
-
+import uuid
 from django.utils import timezone
 from calls.models import Call
 from agents.models import Agent
@@ -7,20 +6,23 @@ from agents.models import Agent
 def handle(entry):
     """
     Process call_ended webhook from ElevenLabs.
-    Also supports post_call_transcription events where data is inside 'data'.
+    Generates a call_id if not present.
     """
     print(f"Processing call_ended webhook {entry.id}")
     payload = entry.payload
 
-    # Helper para obtener un campo desde payload, buscando dentro de 'data' si no está en raíz
+    # Helper para obtener campos desde payload o data
     def get_field(key, default=None):
-        # Buscar en raíz
         value = payload.get(key)
         if value is not None:
             return value
-        # Buscar dentro de 'data'
         data = payload.get('data', {})
         return data.get(key, default)
+
+    # Mostrar el contenido de data para depuración
+    data = payload.get('data', {})
+    print("Data keys:", list(data.keys()))
+    print("Full data:", data)
 
     # Extraer campos
     call_id = get_field('call_id')
@@ -30,11 +32,13 @@ def handle(entry):
     ended_at = get_field('ended_at')
     agent_id_from_payload = get_field('agent_id') or get_field('agentId') or get_field('conversation_agent_id')
 
+    # Si no hay call_id, generamos uno
     if not call_id:
-        print(f"No call_id found in payload for entry {entry.id}")
-        return {"error": "call_id missing"}
+        # Usamos un UUID + algo de contexto (entry.id) para asegurar unicidad
+        call_id = f"webhook_{entry.id}_{uuid.uuid4().hex[:8]}"
+        print(f"Generated call_id: {call_id}")
 
-    # Usar agente ya asociado o buscarlo por ID
+    # Asociar agente
     agent = entry.agent
     if not agent and agent_id_from_payload:
         try:
@@ -56,7 +60,7 @@ def handle(entry):
     if ended_at and isinstance(ended_at, str):
         ended_at = timezone.datetime.fromisoformat(ended_at.replace('Z', '+00:00'))
 
-    # Mapeo de estados (incluyendo 'done' de post_call_transcription)
+    # Mapeo de estados
     status_mapping = {
         'completed': 'completed',
         'failed': 'failed',
@@ -66,14 +70,22 @@ def handle(entry):
     }
     status = status_mapping.get(status, 'completed')
 
-    # Crear o actualizar la llamada
+    # Si no hay started_at, usamos el event_timestamp del payload o el created_at de entrada
+    if not started_at:
+        event_ts = payload.get('event_timestamp')
+        if event_ts:
+            started_at = timezone.datetime.fromtimestamp(event_ts, tz=timezone.utc)
+        else:
+            started_at = entry.created_at
+
+    # Crear o actualizar llamada (usamos update_or_create con call_id generado)
     call, created = Call.objects.update_or_create(
         call_id=call_id,
         defaults={
             'agent': agent,
             'duration_seconds': duration_seconds,
             'status': status,
-            'started_at': started_at or timezone.now(),
+            'started_at': started_at,
             'ended_at': ended_at,
             'call_data': payload,
         }
