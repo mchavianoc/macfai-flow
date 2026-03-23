@@ -14,13 +14,8 @@ logger = logging.getLogger(__name__)
 
 def verify_elevenlabs_signature(request, secret):
     """Verify HMAC-SHA256 signature from ElevenLabs."""
-    # Buscar la cabecera exacta que ElevenLabs envía
+    # Obtener la cabecera exacta que ElevenLabs envía
     signature = request.headers.get('Elevenlabs-Signature')
-    
-    if not signature:
-        # Fallback para otras variaciones
-        signature = (request.headers.get('X-ElevenLabs-Signature') or
-                    request.headers.get('X-Elevenlabs-Signature'))
     
     if not signature:
         logger.warning("No signature header found. Headers: %s", list(request.headers.keys()))
@@ -39,14 +34,16 @@ def verify_elevenlabs_signature(request, secret):
     # Calcular HMAC
     expected = hmac.new(secret_bytes, body, hashlib.sha256).hexdigest()
     
-    # LOGS CRÍTICOS PARA DEPURACIÓN
+    # LOGS DETALLADOS PARA DEPURACIÓN
     logger.info("=" * 50)
     logger.info("SIGNATURE DEBUG INFO:")
+    logger.info(f"Secret (first 10 chars): {secret[:10]}...")
+    logger.info(f"Body length: {len(body)} bytes")
+    logger.info(f"Body hex (first 100): {body[:100].hex()}")
+    logger.info(f"Body preview (first 300 chars): {body[:300]}")
     logger.info(f"Expected signature: {expected}")
     logger.info(f"Received signature: {signature}")
     logger.info(f"Signatures match: {expected == signature}")
-    logger.info(f"Body length: {len(body)} bytes")
-    logger.info(f"Body preview (first 300 chars): {body[:300]}")
     logger.info("=" * 50)
     
     return hmac.compare_digest(expected, signature)
