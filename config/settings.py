@@ -15,6 +15,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'flow.macfai.com',
 ]
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -58,10 +59,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 # Database - PostgreSQL
 DATABASES = {
     'default': {
@@ -104,9 +101,8 @@ LOGOUT_REDIRECT_URL = 'login'
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
 
 # ElevenLabs webhook secrets
-ELEVENLABS_SECRET = os.environ.get('ELEVENLABS_SECRET', '')          # For general webhooks (e.g., morgan_quote)
-ELEVENLABS_SECRET_CALL_ENDED = os.environ.get('ELEVENLABS_SECRET_CALL_ENDED', '')  # For call_ended webhook
-
+ELEVENLABS_SECRET = os.environ.get('ELEVENLABS_SECRET', '')
+ELEVENLABS_SECRET_CALL_ENDED = os.environ.get('ELEVENLABS_SECRET_CALL_ENDED', '')
 
 # Disable APPEND_SLASH to avoid redirect issues with webhook POST requests
 APPEND_SLASH = False
