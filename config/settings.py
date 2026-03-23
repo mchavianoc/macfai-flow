@@ -105,4 +105,4 @@ ELEVENLABS_SECRET = os.environ.get('ELEVENLABS_SECRET', '')
 ELEVENLABS_SECRET_CALL_ENDED = os.environ.get('ELEVENLABS_SECRET_CALL_ENDED', '')
 
 # Disable APPEND_SLASH to avoid redirect issues with webhook POST requests
-APPEND_SLASH = False
+APPEND_SLASH = True
