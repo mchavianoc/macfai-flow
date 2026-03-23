@@ -18,6 +18,10 @@ def handle(entry):
     started_at = payload.get('started_at')
     ended_at = payload.get('ended_at')
     agent_id_from_payload = payload.get('agent_id') or payload.get('agentId') or payload.get('conversation_agent_id')
+    # Buscar también dentro de 'data'
+    if not agent_id_from_payload and isinstance(payload.get('data'), dict):
+        data = payload['data']
+        agent_id_from_payload = data.get('agent_id') or data.get('agentId') or data.get('conversation_agent_id')
 
     # Use agent already associated or try to find by ID
     agent = entry.agent

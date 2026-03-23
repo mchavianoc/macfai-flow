@@ -91,7 +91,12 @@ def webhook_receiver(request, endpoint):
     # Asociar agente...
     agent_id = request.GET.get('agent_id')
     if not agent_id and payload:
+        # Buscar en la raíz del payload
         agent_id = payload.get('agent_id') or payload.get('agentId') or payload.get('conversation_agent_id')
+        # Si no se encuentra, buscar dentro de 'data' si existe
+        if not agent_id and isinstance(payload.get('data'), dict):
+            data = payload['data']
+            agent_id = data.get('agent_id') or data.get('agentId') or data.get('conversation_agent_id')
 
     if agent_id:
         try:
