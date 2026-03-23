@@ -108,5 +108,5 @@ ELEVENLABS_SECRET = os.environ.get('ELEVENLABS_SECRET', '')          # For gener
 ELEVENLABS_SECRET_CALL_ENDED = os.environ.get('ELEVENLABS_SECRET_CALL_ENDED', '')  # For call_ended webhook
 
 
-# In config/settings.py
-APPEND_SLASH = False  # Changed from True to False to fix webhook POST redirect issues
+# Disable APPEND_SLASH to avoid redirect issues with webhook POST requests
+APPEND_SLASH = False
