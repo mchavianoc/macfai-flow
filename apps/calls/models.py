@@ -1,11 +1,8 @@
+# calls/models.py
 from django.db import models
-from django.conf import settings
 from agents.models import Agent
 
 class Call(models.Model):
-    """
-    Registro de llamadas realizadas a través de los agentes.
-    """
     STATUS_CHOICES = [
         ('completed', 'Completed'),
         ('in_progress', 'In Progress'),
@@ -13,23 +10,16 @@ class Call(models.Model):
         ('interrupted', 'Interrupted')
     ]
     
-    agent = models.ForeignKey(
-        Agent, 
-        on_delete=models.CASCADE, 
-        related_name='calls'
-    )
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='calls')
     call_id = models.CharField(max_length=100, unique=True)
     duration_seconds = models.PositiveIntegerField()
-    status = models.CharField(
-        max_length=20, 
-        choices=STATUS_CHOICES,
-        default='completed'
-    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
+    cost = models.PositiveIntegerField(default=0, help_text="Costo en créditos de ElevenLabs")
+    termination_reason = models.CharField(max_length=200, blank=True)
+    language = models.CharField(max_length=10, blank=True)
     
-    # Datos flexibles específicos del cliente
     call_data = models.JSONField(default=dict)
     
-    # Metadatos
     started_at = models.DateTimeField()
     ended_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
