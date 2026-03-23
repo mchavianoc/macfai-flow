@@ -8,35 +8,45 @@ from django.views.decorators.http import require_POST
 from django.conf import settings
 from .models import WebhookEntry
 from agents.models import Agent
-from .handlers.call_ended import handle as handle_call_ended   # import directly
+from .handlers.call_ended import handle as handle_call_ended
 
 logger = logging.getLogger(__name__)
 
 def verify_elevenlabs_signature(request, secret):
     """Verify HMAC-SHA256 signature from ElevenLabs."""
-    signature = request.headers.get('X-ElevenLabs-Signature') or \
-                request.headers.get('X-Elevenlabs-Signature')
+    # Probar diferentes variaciones del nombre
+    signature = (request.headers.get('X-ElevenLabs-Signature') or
+                request.headers.get('X-Elevenlabs-Signature') or
+                request.headers.get('HTTP_X_ELEVENLABS_SIGNATURE') or
+                request.headers.get('ElevenLabs-Signature'))
+    
     if not signature:
-        logger.warning("No X-ElevenLabs-Signature header found")
+        logger.warning("No se encontró cabecera de firma. Cabeceras: %s", 
+                      list(request.headers.keys()))
         return False
+    
     secret = secret.encode()
     body = request.body
     expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
+    
     return hmac.compare_digest(expected, signature)
 
 @csrf_exempt
 @require_POST
 def webhook_receiver(request, endpoint):
     """Generic webhook receiver."""
-    logger.info(f"Received webhook for endpoint '{endpoint}'")
-
+    logger.info(f"Webhook recibido para endpoint '{endpoint}'")
+    logger.info(f"Cabeceras: {dict(request.headers)}")
+    
     # Parse payload
     try:
         payload = json.loads(request.body)
         raw_body = ''
+        logger.info(f"Payload: {json.dumps(payload, indent=2)[:500]}")  # Log parcial
     except json.JSONDecodeError:
         payload = {}
         raw_body = request.body.decode('utf-8', errors='replace')
+        logger.info(f"Raw body: {raw_body[:500]}")
 
     entry = WebhookEntry.objects.create(
         endpoint=endpoint,
@@ -45,7 +55,7 @@ def webhook_receiver(request, endpoint):
         raw_body=raw_body,
     )
 
-    # Associate agent if possible (from query param or payload)
+    # Asociar agente
     agent_id = request.GET.get('agent_id')
     if not agent_id and payload:
         agent_id = payload.get('agent_id') or payload.get('agentId')
@@ -55,35 +65,36 @@ def webhook_receiver(request, endpoint):
             entry.agent = agent
             entry.user = agent.user
             entry.save(update_fields=['agent', 'user'])
+            logger.info(f"Agente asociado: {agent.name}")
         except Agent.DoesNotExist:
-            pass
+            logger.warning(f"Agente con ID {agent_id} no encontrado")
 
-    # Handle special endpoint 'call_ended' with HMAC validation
+    # Manejar call_ended
     if endpoint == 'call_ended':
         secret = settings.ELEVENLABS_SECRET_CALL_ENDED
-        if not secret:
-            logger.error("ELEVENLABS_SECRET_CALL_ENDED not set")
-            return HttpResponseBadRequest("Server misconfiguration")
+        
+        if secret:
+            if not verify_elevenlabs_signature(request, secret):
+                logger.error(f"Firma inválida para call_ended. Entry ID: {entry.id}")
+                return HttpResponseBadRequest("Firma inválida")
+            logger.info(f"Firma verificada correctamente para call_ended")
+        else:
+            logger.warning("ELEVENLABS_SECRET_CALL_ENDED no configurado")
 
-        if not verify_elevenlabs_signature(request, secret):
-            logger.warning(f"Invalid HMAC signature for call_ended. Entry ID: {entry.id}")
-            return HttpResponseBadRequest("Invalid signature")
-
-        # Process call_ended synchronously (or could be threaded if long)
         try:
             result = handle_call_ended(entry)
             entry.processed = True
-            # No processing_result stored – we just log if needed
             entry.save(update_fields=['processed'])
-            logger.info(f"call_ended processed: {result}")
+            logger.info(f"call_ended procesado: {result}")
         except Exception as e:
-            logger.exception(f"Error processing call_ended: {e}")
-            # Still mark as processed to avoid retries, but log error
+            logger.exception(f"Error procesando call_ended: {e}")
             entry.processed = True
             entry.save(update_fields=['processed'])
+            return JsonResponse({"status": "error", "error": str(e)}, status=500)
+            
         return JsonResponse({"status": "success", "webhook_id": entry.id})
 
-    # For all other endpoints, just store the entry and return
+    # Otros endpoints
     entry.processed = True
     entry.save(update_fields=['processed'])
     return JsonResponse({"status": "success", "webhook_id": entry.id})
