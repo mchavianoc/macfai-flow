@@ -14,37 +14,33 @@ logger = logging.getLogger(__name__)
 
 def verify_elevenlabs_signature(request, secret):
     """Verify HMAC-SHA256 signature from ElevenLabs."""
-    # Obtener la cabecera exacta que ElevenLabs envía
     signature = request.headers.get('Elevenlabs-Signature')
     
+    print("=== DEBUG SIGNATURE ===")
+    print(f"Secret (first 10): {secret[:10]}...")
+    print(f"Headers: {dict(request.headers)}")
+    print(f"Raw signature header: {signature}")
+    
     if not signature:
-        logger.warning("No signature header found. Headers: %s", list(request.headers.keys()))
+        print("No signature header found")
         return False
     
-    logger.error(f"Raw signature header: {signature}")  # nivel ERROR
-    
-    # Quitar prefijo 'sha256=' si existe
     if signature.startswith('sha256='):
         signature = signature[7:]
-        logger.error("Removed 'sha256=' prefix")  # nivel ERROR
+        print("Removed 'sha256=' prefix")
     
     secret_bytes = secret.encode('utf-8')
     body = request.body
     
-    # Calcular HMAC
-    expected = hmac.new(secret_bytes, body, hashlib.sha256).hexdigest()
+    print(f"Body length: {len(body)}")
+    print(f"Body hex (first 100): {body[:100].hex()}")
+    print(f"Body preview: {body[:300]}")
     
-    # LOGS DETALLADOS EN NIVEL ERROR
-    logger.error("=" * 50)
-    logger.error("SIGNATURE DEBUG INFO:")
-    logger.error(f"Secret (first 10 chars): {secret[:10]}...")
-    logger.error(f"Body length: {len(body)} bytes")
-    logger.error(f"Body hex (first 100): {body[:100].hex()}")
-    logger.error(f"Body preview (first 300 chars): {body[:300]}")
-    logger.error(f"Expected signature: {expected}")
-    logger.error(f"Received signature: {signature}")
-    logger.error(f"Signatures match: {expected == signature}")
-    logger.error("=" * 50)
+    expected = hmac.new(secret_bytes, body, hashlib.sha256).hexdigest()
+    print(f"Expected signature: {expected}")
+    print(f"Received signature: {signature}")
+    print(f"Match: {expected == signature}")
+    print("=========================")
     
     return hmac.compare_digest(expected, signature)
 
@@ -52,30 +48,28 @@ def verify_elevenlabs_signature(request, secret):
 @require_POST
 def webhook_receiver(request, endpoint):
     """Generic webhook receiver."""
-    logger.error(f"Webhook received for endpoint '{endpoint}'")  # nivel ERROR
-    logger.error(f"Request headers: {dict(request.headers)}")  # nivel ERROR
+    print(f"Webhook received for endpoint '{endpoint}'")
+    print(f"Headers: {dict(request.headers)}")
     
-    # Parse payload
     try:
         payload = json.loads(request.body)
         raw_body = ''
-        logger.error(f"Payload parsed successfully. Keys: {list(payload.keys()) if payload else 'empty'}")
+        print(f"Payload parsed. Keys: {list(payload.keys()) if payload else 'empty'}")
     except json.JSONDecodeError as e:
         payload = {}
         raw_body = request.body.decode('utf-8', errors='replace')
-        logger.warning(f"JSON decode error: {e}")
-        logger.error(f"Raw body (first 500 chars): {raw_body[:500]}")  # nivel ERROR
-
-    # Crear entrada en la base de datos
+        print(f"JSON decode error: {e}")
+        print(f"Raw body (first 500): {raw_body[:500]}")
+    
     entry = WebhookEntry.objects.create(
         endpoint=endpoint,
         method=request.method,
         payload=payload,
         raw_body=raw_body,
     )
-    logger.error(f"Created WebhookEntry with ID: {entry.id}")
-
-    # Asociar agente si es posible
+    print(f"Created WebhookEntry ID: {entry.id}")
+    
+    # Asociar agente...
     agent_id = request.GET.get('agent_id')
     if not agent_id and payload:
         agent_id = payload.get('agent_id') or payload.get('agentId') or payload.get('conversation_agent_id')
@@ -86,51 +80,40 @@ def webhook_receiver(request, endpoint):
             entry.agent = agent
             entry.user = agent.user
             entry.save(update_fields=['agent', 'user'])
-            logger.error(f"Agent associated: {agent.name} (ID: {agent.agent_id})")
+            print(f"Agent associated: {agent.name}")
         except Agent.DoesNotExist:
-            logger.warning(f"Agent with ID {agent_id} not found")
+            print(f"Agent with ID {agent_id} not found")
     else:
-        logger.error("No agent_id found in request or payload")
-
-    # Manejar endpoint específico 'call_ended'
+        print("No agent_id found")
+    
+    # Manejar call_ended
     if endpoint == 'call_ended':
         secret = settings.ELEVENLABS_SECRET_CALL_ENDED
-        
-        # Verificar que el secreto está configurado
         if not secret:
-            logger.error("ELEVENLABS_SECRET_CALL_ENDED is not configured in settings!")
-            logger.error("Please set this environment variable and restart the server")
-            return HttpResponseBadRequest("Server configuration error: missing secret")
+            print("ELEVENLABS_SECRET_CALL_ENDED not configured!")
+            return HttpResponseBadRequest("Missing secret")
         
-        logger.error(f"Secret loaded (first 20 chars): {secret[:20]}...")
+        print(f"Secret loaded (first 20): {secret[:20]}...")
         
-        # Verificar la firma
         if not verify_elevenlabs_signature(request, secret):
-            logger.error(f"Invalid signature for call_ended. Entry ID: {entry.id}")
+            print(f"Invalid signature for call_ended. Entry ID: {entry.id}")
             return HttpResponseBadRequest("Invalid signature")
         
-        logger.error(f"Signature verified successfully for call_ended webhook")
-        
-        # Procesar el webhook
+        print("Signature verified")
         try:
             result = handle_call_ended(entry)
             entry.processed = True
             entry.save(update_fields=['processed'])
-            logger.error(f"call_ended processed successfully. Result: {result}")
+            print(f"call_ended processed: {result}")
             return JsonResponse({"status": "success", "webhook_id": entry.id, "result": result})
         except Exception as e:
-            logger.exception(f"Error processing call_ended webhook: {e}")
+            print(f"Error processing: {e}")
             entry.processed = True
             entry.save(update_fields=['processed'])
             return JsonResponse({"status": "error", "error": str(e)}, status=500)
     
-    # Para cualquier otro endpoint, solo almacenar y responder
-    logger.error(f"Processing generic endpoint '{endpoint}'")
+    # Otros endpoints...
+    print(f"Generic endpoint '{endpoint}'")
     entry.processed = True
     entry.save(update_fields=['processed'])
-    
-    return JsonResponse({
-        "status": "success", 
-        "webhook_id": entry.id,
-        "message": f"Webhook for '{endpoint}' received and stored"
-    })
+    return JsonResponse({"status": "success", "webhook_id": entry.id})
