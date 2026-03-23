@@ -1,27 +1,34 @@
-import logging
-from django.utils import timezone
-from calls.models import Call
-from agents.models import Agent
-
-logger = logging.getLogger(__name__)
+# apps/webhooks/handlers/call_ended.py
 
 def handle(entry):
     """
     Process call_ended webhook from ElevenLabs.
+    Also supports post_call_transcription events where data is inside 'data'.
     """
     logger.info(f"Processing call_ended webhook {entry.id}")
     payload = entry.payload
 
-    call_id = payload.get('call_id')
-    duration_seconds = payload.get('duration_seconds', 0)
-    status = payload.get('status', 'completed')
-    started_at = payload.get('started_at')
-    ended_at = payload.get('ended_at')
-    agent_id_from_payload = payload.get('agent_id') or payload.get('agentId') or payload.get('conversation_agent_id')
-    # Buscar también dentro de 'data'
-    if not agent_id_from_payload and isinstance(payload.get('data'), dict):
-        data = payload['data']
-        agent_id_from_payload = data.get('agent_id') or data.get('agentId') or data.get('conversation_agent_id')
+    # Helper to get a field from payload, falling back to data
+    def get_field(key, default=None):
+        # Check root
+        value = payload.get(key)
+        if value is not None:
+            return value
+        # Check inside data
+        data = payload.get('data', {})
+        return data.get(key, default)
+
+    # Extract fields with fallback
+    call_id = get_field('call_id')
+    duration_seconds = get_field('duration_seconds', 0)
+    status = get_field('status', 'completed')
+    started_at = get_field('started_at')
+    ended_at = get_field('ended_at')
+    agent_id_from_payload = get_field('agent_id') or get_field('agentId') or get_field('conversation_agent_id')
+
+    if not call_id:
+        logger.error(f"No call_id found in payload for entry {entry.id}")
+        return {"error": "call_id missing"}
 
     # Use agent already associated or try to find by ID
     agent = entry.agent
@@ -51,6 +58,7 @@ def handle(entry):
         'failed': 'failed',
         'interrupted': 'interrupted',
         'in_progress': 'in_progress',
+        'done': 'completed',          # 'done' appears in post_call_transcription
     }
     status = status_mapping.get(status, 'completed')
 
