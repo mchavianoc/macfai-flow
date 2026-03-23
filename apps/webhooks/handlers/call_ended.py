@@ -1,24 +1,28 @@
 # apps/webhooks/handlers/call_ended.py
 
+from django.utils import timezone
+from calls.models import Call
+from agents.models import Agent
+
 def handle(entry):
     """
     Process call_ended webhook from ElevenLabs.
     Also supports post_call_transcription events where data is inside 'data'.
     """
-    logger.info(f"Processing call_ended webhook {entry.id}")
+    print(f"Processing call_ended webhook {entry.id}")
     payload = entry.payload
 
-    # Helper to get a field from payload, falling back to data
+    # Helper para obtener un campo desde payload, buscando dentro de 'data' si no está en raíz
     def get_field(key, default=None):
-        # Check root
+        # Buscar en raíz
         value = payload.get(key)
         if value is not None:
             return value
-        # Check inside data
+        # Buscar dentro de 'data'
         data = payload.get('data', {})
         return data.get(key, default)
 
-    # Extract fields with fallback
+    # Extraer campos
     call_id = get_field('call_id')
     duration_seconds = get_field('duration_seconds', 0)
     status = get_field('status', 'completed')
@@ -27,10 +31,10 @@ def handle(entry):
     agent_id_from_payload = get_field('agent_id') or get_field('agentId') or get_field('conversation_agent_id')
 
     if not call_id:
-        logger.error(f"No call_id found in payload for entry {entry.id}")
+        print(f"No call_id found in payload for entry {entry.id}")
         return {"error": "call_id missing"}
 
-    # Use agent already associated or try to find by ID
+    # Usar agente ya asociado o buscarlo por ID
     agent = entry.agent
     if not agent and agent_id_from_payload:
         try:
@@ -39,30 +43,30 @@ def handle(entry):
             entry.user = agent.user
             entry.save(update_fields=['agent', 'user'])
         except Agent.DoesNotExist:
-            logger.warning(f"Agent with ID {agent_id_from_payload} not found")
+            print(f"Agent with ID {agent_id_from_payload} not found")
             return {"error": "Agent not found"}
 
     if not agent:
-        logger.warning("No agent associated")
+        print("No agent associated")
         return {"error": "No agent associated"}
 
-    # Convert timestamps if they are strings
+    # Convertir timestamps si son strings
     if started_at and isinstance(started_at, str):
         started_at = timezone.datetime.fromisoformat(started_at.replace('Z', '+00:00'))
     if ended_at and isinstance(ended_at, str):
         ended_at = timezone.datetime.fromisoformat(ended_at.replace('Z', '+00:00'))
 
-    # Map status if needed
+    # Mapeo de estados (incluyendo 'done' de post_call_transcription)
     status_mapping = {
         'completed': 'completed',
         'failed': 'failed',
         'interrupted': 'interrupted',
         'in_progress': 'in_progress',
-        'done': 'completed',          # 'done' appears in post_call_transcription
+        'done': 'completed',
     }
     status = status_mapping.get(status, 'completed')
 
-    # Create or update call record
+    # Crear o actualizar la llamada
     call, created = Call.objects.update_or_create(
         call_id=call_id,
         defaults={
@@ -75,5 +79,5 @@ def handle(entry):
         }
     )
 
-    logger.info(f"Call {call_id} {'created' if created else 'updated'} for agent {agent.name}")
+    print(f"Call {call_id} {'created' if created else 'updated'} for agent {agent.name}")
     return {"success": True, "call_id": call_id}
