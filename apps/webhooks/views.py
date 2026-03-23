@@ -14,39 +14,34 @@ logger = logging.getLogger(__name__)
 
 def verify_elevenlabs_signature(request, secret):
     """Verify HMAC-SHA256 signature from ElevenLabs."""
-    # Buscar la cabecera en diferentes formatos
-    signature_header = (request.headers.get('X-ElevenLabs-Signature') or
-                       request.headers.get('X-Elevenlabs-Signature') or
-                       request.headers.get('HTTP_X_ELEVENLABS_SIGNATURE'))
+    # La cabecera exacta que envía ElevenLabs es 'Elevenlabs-Signature'
+    signature = request.headers.get('Elevenlabs-Signature')
     
-    if not signature_header:
+    if not signature:
+        # Fallback para otras variaciones
+        signature = (request.headers.get('X-ElevenLabs-Signature') or
+                    request.headers.get('X-Elevenlabs-Signature'))
+    
+    if not signature:
         logger.warning("No signature header found. Headers: %s", list(request.headers.keys()))
         return False
     
-    logger.info(f"Raw signature header: {signature_header}")
+    logger.info(f"Signature header found")
     
-    # ElevenLabs puede enviar "sha256=hash" o solo el hash
-    signature = signature_header
-    if signature_header.startswith('sha256='):
-        signature = signature_header[7:]  # Quitar "sha256="
-        logger.info("Detected 'sha256=' prefix, extracted hash")
-    elif signature_header.startswith('v1='):
-        # Algunos servicios usan formato v1=...
-        signature = signature_header[3:]
-        logger.info("Detected 'v1=' prefix, extracted hash")
+    # Quitar prefijo 'sha256=' si existe
+    if signature.startswith('sha256='):
+        signature = signature[7:]
+        logger.info("Removed 'sha256=' prefix")
     
     secret_bytes = secret.encode('utf-8')
     body = request.body
     
-    # Logs para depuración
-    logger.debug(f"Body length: {len(body)}")
-    logger.debug(f"Body preview: {body[:200]}")
-    
     # Calcular HMAC
     expected = hmac.new(secret_bytes, body, hashlib.sha256).hexdigest()
     
-    logger.info(f"Expected signature: {expected}")
-    logger.info(f"Received signature: {signature}")
+    # Logs para depuración (opcional, puedes comentarlos después)
+    logger.debug(f"Expected: {expected[:20]}...")
+    logger.debug(f"Received: {signature[:20]}...")
     
     result = hmac.compare_digest(expected, signature)
     logger.info(f"Signature verification: {'SUCCESS' if result else 'FAILED'}")
@@ -63,11 +58,9 @@ def webhook_receiver(request, endpoint):
     try:
         payload = json.loads(request.body)
         raw_body = ''
-        logger.info(f"Payload keys: {list(payload.keys()) if payload else 'empty'}")
     except json.JSONDecodeError:
         payload = {}
         raw_body = request.body.decode('utf-8', errors='replace')
-        logger.info(f"Raw body (non-JSON): {raw_body[:200]}")
 
     entry = WebhookEntry.objects.create(
         endpoint=endpoint,
@@ -75,9 +68,8 @@ def webhook_receiver(request, endpoint):
         payload=payload,
         raw_body=raw_body,
     )
-    logger.info(f"Created webhook entry {entry.id}")
 
-    # Associate agent
+    # Asociar agente
     agent_id = request.GET.get('agent_id')
     if not agent_id and payload:
         agent_id = payload.get('agent_id') or payload.get('agentId')
@@ -87,29 +79,29 @@ def webhook_receiver(request, endpoint):
             entry.agent = agent
             entry.user = agent.user
             entry.save(update_fields=['agent', 'user'])
-            logger.info(f"Associated agent: {agent.name} (ID: {agent.agent_id})")
+            logger.info(f"Agent associated: {agent.name}")
         except Agent.DoesNotExist:
             logger.warning(f"Agent with ID {agent_id} not found")
 
-    # Handle call_ended
+    # Manejar call_ended
     if endpoint == 'call_ended':
         secret = settings.ELEVENLABS_SECRET_CALL_ENDED
         
         if not secret:
-            logger.error("ELEVENLABS_SECRET_CALL_ENDED not configured!")
+            logger.error("ELEVENLABS_SECRET_CALL_ENDED not configured")
             return HttpResponseBadRequest("Server configuration error")
         
         if not verify_elevenlabs_signature(request, secret):
             logger.error(f"Invalid signature for call_ended. Entry ID: {entry.id}")
             return HttpResponseBadRequest("Invalid signature")
         
-        logger.info(f"Signature verified successfully for call_ended")
+        logger.info(f"Signature verified successfully")
 
         try:
             result = handle_call_ended(entry)
             entry.processed = True
             entry.save(update_fields=['processed'])
-            logger.info(f"call_ended processed successfully: {result}")
+            logger.info(f"call_ended processed: {result}")
         except Exception as e:
             logger.exception(f"Error processing call_ended: {e}")
             entry.processed = True
@@ -118,7 +110,7 @@ def webhook_receiver(request, endpoint):
             
         return JsonResponse({"status": "success", "webhook_id": entry.id})
 
-    # Other endpoints
+    # Otros endpoints
     entry.processed = True
     entry.save(update_fields=['processed'])
     return JsonResponse({"status": "success", "webhook_id": entry.id})
